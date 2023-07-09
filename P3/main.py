@@ -1,4 +1,6 @@
 from typing import Optional, Callable
+import string
+from transition_probability_table import build_bigram, build_trigram
 
 
 def cleanup(script: str) -> str:
@@ -31,97 +33,160 @@ def download_script(title: str):
 
 
 class Indexifiers:
-    import string
-
     _lowercase = string.ascii_lowercase
     _uppercase = string.ascii_uppercase
     _digits = string.digits
+    _whitespace = string.whitespace
 
-    del string
+    class Letters:
+        @staticmethod
+        def lowercase(
+            text: str,
+            return_mapping: bool = False
+        ) -> tuple[int] | tuple[tuple[int], dict[str, int]]:
+            mapping = {
+                token: index for index, token in enumerate(
+                    Indexifiers._lowercase,
+                    start=1
+                )
+            }
 
-    @staticmethod
-    def lowercase(token: str) -> tuple[int]:
-        def convert(char: str) -> int:
-            assert len(char) == 1, (
-                f'{char = } is not a lowercase letter or space (\' \')!'
-            )
-            if char.isspace():
-                return 0
-            elif char in Indexifiers._lowercase:
-                return Indexifiers._lowercase.index(char) + 1
+            mapping.update({c: 0 for c in Indexifiers._whitespace})
 
-            raise ValueError(
-                f'{char = } is not a lowercase letter or space (\' \')!'
-            )
-        return tuple(map(convert, token))  # type: ignore
+            res = tuple(map(mapping.get, text))
 
-    @staticmethod
-    def uppercase(token: str) -> tuple[int]:
-        def convert(char: str) -> int:
-            assert len(char) == 1, (
-                f'{char = } is not a uppercase letter or space (\' \')!'
-            )
-            if char.isspace():
-                return 0
-            elif char in Indexifiers._uppercase:
-                return Indexifiers._uppercase.index(char) + 1
+            if None in res:
+                raise ValueError('text contains non alpha-numeric characters')
 
-            raise ValueError(
-                f'{char = } is not a uppercase letter or space (\' \')!'
-            )
-        return tuple(map(convert, token))  # type: ignore
+            if return_mapping:
+                return res, mapping  # type: ignore
+            return res  # type: ignore
 
-    @staticmethod
-    def alphabetic(token: str) -> tuple[int]:
-        def convert(char: str) -> int:
-            lowercase_offset = 1 + len(Indexifiers._uppercase)
-            assert len(char) == 1, (
-                f'{char = } is not a alphabetic character or space (\' \')!'
-            )
-            if char.isspace():
-                return 0
-            elif char in Indexifiers._uppercase:
-                return Indexifiers._uppercase.index(char) + 1
-            elif char in Indexifiers._lowercase:
-                return Indexifiers._lowercase.index(char) + lowercase_offset
+        @staticmethod
+        def uppercase(
+            text: str,
+            return_mapping: bool = False
+        ) -> tuple[int] | tuple[tuple[int], dict[str, int]]:
+            mapping = {
+                token: index for index, token in enumerate(
+                    Indexifiers._uppercase,
+                    start=1
+                )
+            }
 
-            raise ValueError(
-                f'{char = } is not a lowercase letter or space (\' \')!'
-            )
-        return tuple(map(convert, token))  # type: ignore
+            mapping.update({c: 0 for c in Indexifiers._whitespace})
 
-    @staticmethod
-    def alpha_numeric(token: str) -> tuple[int]:
-        def convert(char: str) -> int:
-            lowercase_offset = 1 + len(Indexifiers._uppercase)
-            digit_offset = lowercase_offset + len(Indexifiers._lowercase)
-            assert len(char) == 1, (
-                f'{char = } is not a alphabetic character or space (\' \')!'
-            )
-            if char.isspace():
-                return 0
-            elif char in Indexifiers._uppercase:
-                return Indexifiers._uppercase.index(char) + 1
-            elif char in Indexifiers._lowercase:
-                return Indexifiers._lowercase.index(char) + lowercase_offset
-            elif char in Indexifiers._lowercase:
-                return Indexifiers._digits.index(char) + digit_offset
+            res = tuple(map(mapping.get, text))
 
-            raise ValueError(
-                f'{char = } is not a lowercase letter or space (\' \')!'
-            )
-        return tuple(map(convert, token))  # type: ignore
+            if None in res:
+                raise ValueError('text contains non uppercase characters')
+
+            if return_mapping:
+                return res, mapping  # type: ignore
+            return res  # type: ignore
+
+        @staticmethod
+        def alphabetic(
+            text: str,
+            return_mapping: bool = False
+        ) -> tuple[int] | tuple[tuple[int], dict[str, int]]:
+            mapping = {
+                token: index for index, token in enumerate(
+                    Indexifiers._uppercase + Indexifiers._lowercase,
+                    start=1
+                )
+            }
+
+            mapping.update({c: 0 for c in Indexifiers._whitespace})
+
+            res = tuple(map(mapping.get, text))
+
+            if None in res:
+                raise ValueError('text contains non alpha-numeric characters')
+
+            if return_mapping:
+                return res, mapping  # type: ignore
+            return res  # type: ignore
+
+        @staticmethod
+        def alpha_numeric(
+            text: str,
+            return_mapping: bool = False
+        ) -> tuple[int] | tuple[tuple[int], dict[str, int]]:
+            mapping = {
+                token: index for index, token in enumerate(
+                    Indexifiers._uppercase + Indexifiers._lowercase + Indexifiers._digits,
+                    start=1
+                )
+            }
+
+            mapping.update({c: 0 for c in Indexifiers._whitespace})
+
+            res = tuple(map(mapping.get, text))
+
+            if None in res:
+                raise ValueError('text contains non alpha-numeric characters')
+
+            if return_mapping:
+                return res, mapping  # type: ignore
+            return res  # type: ignore
+
+    class Words:
+        @staticmethod
+        def case_sensitive(
+            text: str,
+            return_mapping: bool = False
+        ) -> tuple[int] | tuple[tuple[int], dict[str, int]]:
+            text = text.split()  # type: ignore
+            mapping = {token: index for index,
+                       token in enumerate(set(text), start=1)}
+
+            text = tuple(map(mapping.get, text))  # type: ignore
+
+            if return_mapping:
+                return text, mapping  # type: ignore
+            return text  # type: ignore
+
+        @staticmethod
+        def case_insensitive(
+            text: str,
+            return_mapping: bool = False
+        ) -> tuple[int] | tuple[tuple[int], dict[str, int]]:
+            text = text.lower().split()  # type: ignore
+            mapping = {token: index for index,
+                       token in enumerate(set(text), start=1)}
+
+            text = tuple(map(mapping.get, text))  # type: ignore
+
+            if return_mapping:
+                return text, mapping  # type: ignore
+            return text  # type: ignore
 
 
 class Bigram:
-    from transition_probability_table import build_bigram
+    def __init__(self, token_indexifier: Optional[Callable[..., int | tuple[int]]] = None):
+        self._token_indexifier = token_indexifier
 
-    def __init__(self, *, vocab_length: int=27,
-                 vocab: Optional[set]=None,
-                 token_indexifier: Callable[[str], int]):
-        self.transition_matrix = []
+    def fit(self, text: str) -> 'Bigram':
+        if not self._token_indexifier:
+            self._guess_token_indexifier(text)
+
+        self._idxs = self._token_indexifier(text, True)  # type: ignore
+
+        if isinstance(self._idxs, tuple):
+            self._idxs = self._idxs[0]
+
+        self._tpt = build_bigram()
+
+        return self
+
+    def _guess_token_indexifier(self, text):
+        if any([x in text for x in string.whitespace]):
+            self._token_indexifier = Indexifiers.Words.case_insensitive
+        else:
+            self._token_indexifier = Indexifiers.Letters.alpha_numeric
 
 
 if __name__ == '__main__':
     # download_script('Toy Story')
-    print(Indexifiers.alpha_numeric('wow this must be amazing'))
+    print(Indexifiers.Letters.lowercase('wow this must be amazing'))
