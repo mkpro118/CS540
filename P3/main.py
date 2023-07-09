@@ -114,7 +114,7 @@ class Indexifiers:
 
 
 class Bigram:
-    import transition_probability_table
+    from transition_probability_table import build_bigram
 
     def __init__(self, *, vocab_length: int=27,
                  vocab: Optional[set]=None,
