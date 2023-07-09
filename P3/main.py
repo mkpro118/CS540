@@ -1,6 +1,15 @@
-from typing import Optional, Callable
+from functools import wraps
+from typing import Optional, Callable, Sequence
+try:
+    from typing import Self
+except ImportError:
+    from typing_extensions import Self
 import string
-from transition_probability_table import build_bigram, build_trigram
+from transition_probability_table import (  # type: ignore[import]
+    build_unigram,
+    build_bigram,
+    build_trigram,
+)
 
 
 def cleanup(script: str) -> str:
@@ -26,6 +35,7 @@ def download_script(title: str):
 
     container = soup.find('td', 'scrtext')
 
+    assert container, 'Couldn\'t find <td class="scrtext">'
     script = cleanup(container.text)
 
     with open('toy story.txt', 'w') as f:
@@ -33,6 +43,10 @@ def download_script(title: str):
 
 
 class Indexifiers:
+    ArgTypes = [str, bool]
+    RetType = tuple[int] | tuple[tuple[int], dict[str, int]]
+    FuncType = Callable[[str, bool], RetType]
+
     _lowercase = string.ascii_lowercase
     _uppercase = string.ascii_uppercase
     _digits = string.digits
@@ -163,30 +177,121 @@ class Indexifiers:
             return text  # type: ignore
 
 
-class Bigram:
-    def __init__(self, token_indexifier: Optional[Callable[..., int | tuple[int]]] = None):
+class Ngram:
+    def __init__(self, token_indexifier: Optional[Indexifiers.FuncType] = None):
         self._token_indexifier = token_indexifier
+        self._tpt: tuple = tuple()
 
-    def fit(self, text: str) -> 'Bigram':
-        if not self._token_indexifier:
-            self._guess_token_indexifier(text)
-
-        self._idxs = self._token_indexifier(text, True)  # type: ignore
-
-        if isinstance(self._idxs, tuple):
-            self._idxs = self._idxs[0]
-
-        self._tpt = build_bigram()
-
-        return self
-
-    def _guess_token_indexifier(self, text):
+    def _guess_token_indexifier(self, text: str):
         if any([x in text for x in string.whitespace]):
             self._token_indexifier = Indexifiers.Words.case_insensitive
         else:
             self._token_indexifier = Indexifiers.Letters.alpha_numeric
 
+    def _build(self):
+        raise NotImplementedError('Ngram functionality is not yet implemented')
+
+    def fit(self, text: str) -> Self:
+        if not self._token_indexifier:
+            self._guess_token_indexifier(text)
+
+        assert self._token_indexifier
+        indexified = self._token_indexifier(text, True)
+
+        assert len(indexified) == 2, (
+            'Expected the token_indexifier function to return 2 values, got '
+            f'{len(indexified)}. If you are using a custom token_indexifier, '
+            'it should take two positional parameters of types [str, bool] '
+            'and, return type tuple[tuple[int], dict[str, int]]. '
+            'The first parameter is the string to convert '
+            '(the parameter given to fit), and the second is be an indicator '
+            'to return the mapping used to indexify the string.'
+        )
+
+        self._idxs, self._mapping = indexified  # type: ignore[misc]
+        self._inverse_mapping = {y: x for x, y in self._mapping.items()}
+
+        self._build()
+
+        return self
+
+    def predict(self, token: str | Sequence[str]) -> str | tuple[str]:
+        if isinstance(token, str):
+            return self._predict(token)
+
+        return tuple(map(self._predict, token))  # type: ignore
+
+    def _predict(self, token: str) -> str:
+        if token not in self._mapping:
+            raise ValueError(f'Model wasn\'t trained on {token = }')
+
+        idx = max(range(len(self._tpt)), key=self._tpt.__getitem__)
+        return self._inverse_mapping[idx]
+
+    @property
+    def transition_probability_table(self):
+        return self._tpt
+
+    @transition_probability_table.setter
+    def transition_probability_table(self, value):
+        raise ValueError(
+            'Cannot set Transition Probability Table, it must be generated '
+            'using the fit method'
+        )
+
+
+class Unigram(Ngram):
+    def _build(self):
+        self._tpt = build_unigram(self._idxs, max(self._mapping.values()) + 1)
+
+
+class Bigram(Ngram):
+    def _build(self):
+        self._tpt = build_bigram(self._idxs, max(self._mapping.values()) + 1)
+
+
+class Trigram(Ngram):
+    def _build(self):
+        self._tpt = build_trigram(self._idxs, max(self._mapping.values()) + 1)
+
+
+def save_result(func):
+    file = f'{func.__name__}.txt'
+
+    @wraps(func)
+    def inner(*args, **kwargs):
+        result = func(*args, **kwargs)
+        with open(file, 'w') as f:
+            f.write(result)
+        return result
+    return inner
+
+
+@save_result
+def q2(script: str) -> str:
+    model = Unigram(token_indexifier=Indexifiers.Letters.lowercase)
+    model.fit(script)
+    tpt = model.transition_probability_table
+
+    return ', '.join(map(lambda x: f'{round(x, 4):.4f}', tpt))
+
+
+@save_result
+def q3(script: str) -> str:
+    model = Bigram(token_indexifier=Indexifiers.Letters.lowercase)
+    model.fit(script)
+    tpt = model.transition_probability_table
+
+    return '\n'.join(', '.join(map(lambda x: f'{round(x, 4):.4f}', row)) for row in tpt)
+
+
+def main():
+    with open('toy story.txt') as f:
+        script = f.read()
+
+    # q2(script)
+    q3(script)
+
 
 if __name__ == '__main__':
-    # download_script('Toy Story')
-    print(Indexifiers.Letters.lowercase('wow this must be amazing'))
+    main()
