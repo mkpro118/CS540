@@ -1,16 +1,19 @@
 from functools import wraps
-from typing import Optional, Callable, Sequence
+from typing import (
+    Any,
+    Callable,
+    Optional,
+    Sequence,
+)
+import random
+import string
+
 try:
     from typing import Self
 except ImportError:
     from typing_extensions import Self
-import string
-from transition_probability_table import (  # type: ignore[import]
-    build_unigram,
-    build_bigram,
-    build_trigram,
-)
-import random
+
+import probability
 
 
 class Indexifiers:
@@ -250,7 +253,7 @@ class Unigram(Ngram):
         super().__init__(token_indexifier, n=1)
 
     def _build(self):
-        self._tpt = build_unigram(
+        self._tpt = probability.build_unigram(
             self._idxs,
             max(self._mapping.values()) + 1,
             smoothing=self._smoothing
@@ -269,7 +272,7 @@ class Bigram(Ngram):
         super().__init__(token_indexifier, n=2)
 
     def _build(self):
-        self._tpt = build_bigram(
+        self._tpt = probability.build_bigram(
             self._idxs,
             max(self._mapping.values()) + 1,
             smoothing=self._smoothing
@@ -294,7 +297,7 @@ class Trigram(Ngram):
         super().__init__(token_indexifier, n=3)
 
     def _build(self):
-        self._tpt = build_trigram(
+        self._tpt = probability.build_trigram(
             self._idxs,
             max(self._mapping.values()) + 1,
             smoothing=self._smoothing
@@ -310,6 +313,69 @@ class Trigram(Ngram):
 
         idx = random.choices(range(len(tpt)), weights=tpt)[0]
         return self._inverse_mapping[idx]
+
+
+def isclose(a: float, b: float, rel_tol: float = 1e-09, abs_tol: float = 0.0) -> bool:
+    return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+
+
+class NaiveBayesClassifier:
+    def __init__(self, priors: Optional[dict[Any, float]] = None):
+        self._priors = priors or {}
+        assert isinstance(
+            priors, dict), '`priors` must be a dict of prior probabilities'
+        self._biased = bool(priors)
+
+        if self._biased:
+            probs = sum(self._priors.values())
+            assert isclose(1., probs), (
+                'given priors do not add up to 1, '
+                f'sum(priors) = {probs}'
+            )
+
+    def _compute_priors(self, labels: Sequence[Any]):
+        priors = probability.compute_priors(labels)
+        self._priors = priors
+
+    def _compute_posteriors(self, features: Sequence[Any], labels: Sequence[Any]):
+        # Compute the counts of features given each label
+        feature_counts = collections.defaultdict(
+            lambda: collections.defaultdict(int))
+        label_counts = collections.defaultdict(int)
+        for feats, label in zip(features, labels):
+            for feat in feats:
+                feature_counts[label][feat] += 1
+                label_counts[label] += 1
+
+        # Compute the conditional probabilities of features given each label
+        self._posteriors = collections.defaultdict(dict)
+        for label in label_counts:
+            total_count = label_counts[label]
+            for feat in feature_counts[label]:
+                feat_count = feature_counts[label][feat]
+                self._posteriors[label][feat] = feat_count / total_count
+
+    def fit(self, features: Sequence[Sequence[Any]], labels: Sequence[Any]):
+        if not self._biased:
+            self._compute_priors(labels)
+
+        self._compute_posteriors(features, labels)
+
+    def predict(self, X: Sequence[Sequence[Any]]) -> tuple[Any]:
+        predictions = []
+        for feats in X:
+            max_prob = float('-inf')
+            predicted_label = None
+            for label in self._priors:
+                prob = self._priors[label]
+                for feat in feats:
+                    if feat in self._posteriors[label]:
+                        prob *= self._posteriors[label][feat]
+                if prob > max_prob:
+                    max_prob = prob
+                    predicted_label = label
+            predictions.append(predicted_label)
+        return tuple(predictions)  # type: ignore
 
 
 def save_result(func):
@@ -457,4 +523,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # main()
+    nb = NaiveBayesClassifier(priors={10: 10})
+    nb._compute_priors([1, 2, 1, 2, 1, 1, 1, 1, 3, 4,
+                        1, 2, 3, 4, 5, 2, 3, 2, 3, 1])
+    print(nb._priors)
