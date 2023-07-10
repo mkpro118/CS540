@@ -18,16 +18,20 @@
     } \
 }
 #endif
-
-static PyObject* build_unigram(PyObject* self, PyObject* args) {
-    PyObject* idx_tuple;
-    int size;
-
-    if (!PyArg_ParseTuple(args, "O!i", &PyTuple_Type, &idx_tuple, &size)) {
-        return NULL;
-    }
-
+#ifndef _ARG_PARSE_
+#define _ARG_PARSE_ PyObject* idx_tuple; \
+    int size; \
+    int smoothing = 0; \
+    static char* kwlist[] = {"x", "size", "smoothing", NULL}; \
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O!i|p", kwlist, \
+         &PyTuple_Type, &idx_tuple, &size, &smoothing)) { \
+        return NULL; \
+    } \
     Py_ssize_t tuple_size = PyTuple_Size(idx_tuple);
+#endif
+
+static PyObject* build_unigram(PyObject* self, PyObject* args, PyObject* kwargs) {
+    _ARG_PARSE_;
 
     int* table = calloc(size + 1, sizeof(int));
 
@@ -50,7 +54,11 @@ static PyObject* build_unigram(PyObject* self, PyObject* args) {
     PyObject* ret_tuple = PyTuple_New(size);
 
     for (int i = 0; i < size; i++) {
-        item = PyFloat_FromDouble(((double) table[i]) / table[size]);
+        if (smoothing) {
+            item = PyFloat_FromDouble(((float) table[i] + 1) / (table[size] + size));
+        } else {
+            item = PyFloat_FromDouble(((float) table[i]) / table[size]);
+        }
         PyTuple_SetItem(ret_tuple, i, item);
     }
 
@@ -58,15 +66,8 @@ static PyObject* build_unigram(PyObject* self, PyObject* args) {
     return ret_tuple;
 }
 
-static PyObject* build_bigram(PyObject* self, PyObject* args) {
-    PyObject* idx_tuple;
-    int size;
-
-    if (!PyArg_ParseTuple(args, "O!i", &PyTuple_Type, &idx_tuple, &size)) {
-        return NULL;
-    }
-
-    Py_ssize_t tuple_size = PyTuple_Size(idx_tuple);
+static PyObject* build_bigram(PyObject* self, PyObject* args, PyObject* kwargs) {
+    _ARG_PARSE_;
 
     int** table = malloc(sizeof(int*) * size);
     for (int i = 0; i < size; ++i){
@@ -104,7 +105,11 @@ static PyObject* build_bigram(PyObject* self, PyObject* args) {
     for (int i = 0; i < size; i++) {
         PyObject* inner_tuple = PyTuple_New(size);
         for (int j = 0; j < size; j++) {
-            item = PyFloat_FromDouble(((double) table[i][j]) / table[i][size]);
+            if (smoothing) {
+                item = PyFloat_FromDouble(((float) table[i][j] + 1) / (table[i][size] + size));
+            } else {
+                item = PyFloat_FromDouble(((float) table[i][j]) / table[i][size]);
+            }
             PyTuple_SetItem(inner_tuple, j, item);
         }
         PyTuple_SetItem(ret_tuple, i, inner_tuple);
@@ -114,15 +119,8 @@ static PyObject* build_bigram(PyObject* self, PyObject* args) {
     return ret_tuple;
 }
 
-static PyObject* build_trigram(PyObject* self, PyObject* args) {
-    PyObject* idx_tuple;
-    int size;
-
-    if (!PyArg_ParseTuple(args, "O!i", &PyTuple_Type, &idx_tuple, &size)) {
-        return NULL;
-    }
-
-    Py_ssize_t tuple_size = PyTuple_Size(idx_tuple);
+static PyObject* build_trigram(PyObject* self, PyObject* args, PyObject* kwargs) {
+    _ARG_PARSE_;
 
     int*** table = malloc(sizeof(int**) * size);
     for (int i = 0; i < size; ++i){
@@ -176,8 +174,12 @@ static PyObject* build_trigram(PyObject* self, PyObject* args) {
             PyObject* inner_tuple2 = PyTuple_New(size);
 
             for (int k = 0; k < size; k++) {
-                PyObject* value = PyFloat_FromDouble(((double) table[i][j][k]) / table[i][j][size]);
-                PyTuple_SetItem(inner_tuple2, k, value);
+                if (smoothing) {
+                    item = PyFloat_FromDouble(((float) table[i][j][k] + 1) / (table[i][j][size] + size));
+                } else {
+                    item = PyFloat_FromDouble(((float) table[i][j][k]) / table[i][j][size]);
+                }
+                PyTuple_SetItem(inner_tuple2, k, item);
             }
 
             PyTuple_SetItem(inner_tuple1, j, inner_tuple2);
@@ -192,10 +194,19 @@ static PyObject* build_trigram(PyObject* self, PyObject* args) {
 
 // tpt -> Transition Probability Table
 static PyMethodDef tpt_methods[] = {
-    {"build_unigram", build_unigram, METH_VARARGS, "Build a unigram transition probability table (1D-Tuple)"},
-    {"build_bigram", build_bigram, METH_VARARGS, "Build a bigram transition probability table (2D-Tuple)"},
-    {"build_trigram", build_trigram, METH_VARARGS, "Build a trigram transition probability table (3D-Tuple)"},
-    {NULL, NULL, 0, NULL}  // Sentinel
+    {
+        "build_unigram", (PyCFunction) build_unigram, METH_VARARGS | METH_KEYWORDS,
+        "Build a unigram transition probability table (1D-Tuple)"
+    },
+    {
+        "build_bigram", (PyCFunction) build_bigram, METH_VARARGS | METH_KEYWORDS,
+        "Build a bigram transition probability table (2D-Tuple)"
+    },
+    {
+        "build_trigram", (PyCFunction) build_trigram, METH_VARARGS | METH_KEYWORDS,
+        "Build a trigram transition probability table (3D-Tuple)"
+    },
+    {NULL, NULL, 0, NULL}  // Sentinel, marks the end of the array
 };
 
 // tpt -> Transition Probability Table
