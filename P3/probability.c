@@ -41,6 +41,26 @@
     }
 #endif
 
+#ifndef _PY_DECREF_ALL_
+#define _PY_DECREF_ALL_(...) do { \
+    _py_decref_all_(__VA_ARGS__); \
+} while(0);
+#endif
+
+
+void _py_decref_all_(PyObject* arg, ...) {
+    Py_DECREF(arg); // Decrement reference count for the first argument
+
+    va_list args;
+    va_start(args, arg);
+
+    PyObject* next_arg;
+    while ((next_arg = va_arg(args, PyObject*))) {
+        Py_DECREF(next_arg); // Decrement reference count for each subsequent argument
+    }
+
+    va_end(args);
+}
 
 static PyObject* build_unigram(PyObject* self, PyObject* args, PyObject* kwargs) {
     _ARG_PARSE_TPT_;
@@ -282,6 +302,123 @@ static PyObject* compute_priors(PyObject* self, PyObject* args) {
     return counts;
 }
 
+// TODO: Rewrite from python to C
+static PyObject* compute_posteriors(PyObject* self, PyObject* args) {
+    PyObject* features;
+    PyObject* labels;
+
+    if (!PyArg_ParseTuple(args, "OO", &features, &labels)) {
+        PyErr_SetString(PyExc_ValueError, "Expected an indexable sequence!");
+        return NULL;
+    }
+
+    if (!PySequence_Check(labels) || !PySequence_Check(features)) {
+        PyErr_SetString(PyExc_TypeError, "Expected an indexable sequence!");
+        return NULL;
+    }
+
+    Py_ssize_t features_size = PySequence_Length(features);
+    Py_ssize_t labels_size = PySequence_Length(labels);
+
+    if (features_size != labels_size) {
+        PyErr_Format(PyExc_ValueError, "Unequal Number of features samples and labels, (%i != %i)", (int) features_size, (int) labels_size);
+        return NULL;
+    }
+
+    PyObject* feature_counts = PyDict_New();
+    PyObject* label_counts = PyDict_New();
+
+    Py_ssize_t length;
+    PyObject* label;
+    PyObject* feature_vec;
+    PyObject* feature;
+    PyObject* inner_dict;
+    PyObject* ctr;
+
+    // Compute the counts of features given each label
+    for (Py_ssize_t i = 0; i < features_size; i++) {
+        label = PySequence_GetItem(labels, i);
+        feature_vec = PySequence_GetItem(features, i);
+
+        if (!PySequence_Check(feature_vec)) {
+            PyErr_SetString(PyExc_ValueError, "Expected a sequence of features");
+            return NULL;
+        }
+
+        length = PySequence_Length(feature_vec);
+        for (Py_ssize_t j = 0; j < length; j++) {
+            feature = PySequence_GetItem(feature_vec, j);
+
+            inner_dict = PyDict_GetItem(feature_counts, label);
+
+            if (NULL == inner_dict) {
+                inner_dict = PyDict_New();
+                PyDict_SetItem(feature_counts, label, inner_dict);
+            }
+
+            ctr = PyDict_GetItem(inner_dict, feature);
+            ctr = (NULL == ctr) ? PyLong_FromLong(1) : PyLong_FromLong(PyLong_AsLong(ctr) + 1);
+            PyDict_SetItem(inner_dict, feature, ctr);
+
+            ctr = PyDict_GetItem(label_counts, label);
+            ctr = (NULL == ctr) ? PyLong_FromLong(1) : PyLong_FromLong(PyLong_AsLong(ctr) + 1);
+            PyDict_SetItem(label_counts, label, ctr);
+        }
+    }
+
+    // Compute the posterior probabilities of features given each label
+    PyObject* posteriors = PyDict_New();
+    PyObject* total_count_obj;
+    PyObject* feat_count_obj;
+    PyObject* feature_counts_for_label;
+    PyObject* feat_ratio;
+
+    double total_count;
+    double feature_count;
+
+    PyObject* unique_labels = PyDict_Keys(label_counts); // label_counts.keys()
+    Py_ssize_t unique_labels_size = PyList_Size(unique_labels);
+
+    PyObject* unique_feature_counts_for_label;
+    Py_ssize_t unique_feature_counts_for_label_size;
+
+    for (Py_ssize_t i = 0; i < unique_labels_size; i++) {
+        label = PyList_GetItem(unique_labels, i);
+
+        total_count_obj = PyDict_GetItem(label_counts, label);
+        total_count = (double) PyLong_AsLong(total_count_obj);
+
+        feature_counts_for_label = PyDict_GetItem(feature_counts, label); // feature_counts[label]
+        unique_feature_counts_for_label = PyDict_Keys(feature_counts_for_label); // feature_counts[label]
+
+        unique_feature_counts_for_label_size = PyList_Size(unique_feature_counts_for_label);
+
+        inner_dict = PyDict_New();
+
+        PyDict_SetItem(posteriors, label, inner_dict);
+
+        for (Py_ssize_t j = 0; j < unique_feature_counts_for_label_size; j++) {
+            feature = PyList_GetItem(unique_feature_counts_for_label, j);
+
+            feat_count_obj = PyDict_GetItem(feature_counts_for_label, feature);
+            feature_count = (double) PyLong_AsLong(feat_count_obj);
+
+            feat_ratio = PyFloat_FromDouble(feature_count / total_count);
+            PyDict_SetItem(inner_dict, feature, feat_ratio);
+        }
+
+        for (Py_ssize_t j = 0; j < unique_feature_counts_for_label_size; j++) {
+            feature = PyList_GetItem(unique_feature_counts_for_label, j);
+            feat_ratio = PyDict_GetItem(inner_dict, feature);
+            feat_ratio = PyFloat_FromDouble(PyFloat_AsDouble(feat_ratio) / sum_prob);
+            PyDict_SetItem(inner_dict, feature, feat_ratio);
+        }
+    }
+
+    Py_INCREF(posteriors);
+    return posteriors;
+}
+
 
 static PyMethodDef probability_methods[] = {
     {
@@ -299,6 +436,10 @@ static PyMethodDef probability_methods[] = {
     {
         "compute_priors", (PyCFunction) compute_priors, METH_VARARGS,
         "Compute prior probabilities of the items in a given sequence"
+    },
+    {
+        "compute_posteriors", (PyCFunction) compute_posteriors, METH_VARARGS,
+        "Compute posterior probabilities of the features in samples given the labels"
     },
     {NULL, NULL, 0, NULL}  // Sentinel, marks the end of the array
 };

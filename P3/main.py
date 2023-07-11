@@ -5,6 +5,7 @@ from typing import (
     Optional,
     Sequence,
 )
+import math
 import random
 import string
 
@@ -322,11 +323,10 @@ def isclose(a: float, b: float, rel_tol: float = 1e-09, abs_tol: float = 0.0) ->
 class NaiveBayesClassifier:
     def __init__(self, priors: Optional[dict[Any, float]] = None):
         self._priors = priors or {}
-        assert isinstance(
-            priors, dict), '`priors` must be a dict of prior probabilities'
-        self._biased = bool(priors)
-
-        if self._biased:
+        assert isinstance(self._priors, dict), (
+            '`priors` must be a dict of prior probabilities'
+        )
+        if self._priors:
             probs = sum(self._priors.values())
             assert isclose(1., probs), (
                 'given priors do not add up to 1, '
@@ -334,60 +334,71 @@ class NaiveBayesClassifier:
             )
 
     def _compute_priors(self, labels: Sequence[Any]):
-        priors = probability.compute_priors(labels)
-        self._priors = priors
+        self._priors = probability.compute_priors(labels)
 
     def _compute_posteriors(self, features: Sequence[Any], labels: Sequence[Any]):
-        # Compute the counts of features given each label
-        feature_counts = collections.defaultdict(
-            lambda: collections.defaultdict(int))
-        label_counts = collections.defaultdict(int)
-        for feats, label in zip(features, labels):
-            for feat in feats:
-                feature_counts[label][feat] += 1
-                label_counts[label] += 1
+        self._posteriors = probability.compute_posteriors(features, labels)
 
-        # Compute the conditional probabilities of features given each label
-        self._posteriors = collections.defaultdict(dict)
-        for label in label_counts:
-            total_count = label_counts[label]
-            for feat in feature_counts[label]:
-                feat_count = feature_counts[label][feat]
-                self._posteriors[label][feat] = feat_count / total_count
-
-    def fit(self, features: Sequence[Sequence[Any]], labels: Sequence[Any]):
-        if not self._biased:
+    def fit(self, features: Sequence[Sequence[Any]], labels: Sequence[Any]) -> Self:
+        if not self._priors:
             self._compute_priors(labels)
 
         self._compute_posteriors(features, labels)
+        return self
 
     def predict(self, X: Sequence[Sequence[Any]]) -> tuple[Any]:
         predictions = []
         for feats in X:
             max_prob = float('-inf')
             predicted_label = None
-            for label in self._priors:
-                prob = self._priors[label]
-                for feat in feats:
-                    if feat in self._posteriors[label]:
-                        prob *= self._posteriors[label][feat]
+            for label in self._priors.keys():
+                prob = math.log(self._priors[label])
+                _get = self._posteriors[label].get
+                prob = sum(map(lambda x: math.log(_get(x, 1)), feats))
+                # for feat in feats:
+                #     if feat in self._posteriors[label]:
+                #         prob += math.log(self._posteriors[label][feat])
                 if prob > max_prob:
                     max_prob = prob
                     predicted_label = label
             predictions.append(predicted_label)
         return tuple(predictions)  # type: ignore
 
+    @property
+    def priors(self):
+        return self._priors
 
-def save_result(func):
-    file = f'{func.__name__}.txt'
+    @property
+    def posteriors(self):
+        return self._posteriors
 
-    @wraps(func)
-    def inner(*args, **kwargs):
-        result = func(*args, **kwargs)
-        with open(file, 'w') as f:
-            f.write(result)
-        return result
-    return inner
+
+def _():
+    pass
+
+
+FuncType = type(_)
+del _
+
+
+def save_result(func_or_filename):
+    if s := isinstance(func_or_filename, str):
+        file = func_or_filename
+    elif isinstance(func_or_filename, FuncType):
+        file = f'{func_or_filename.__name__}.txt'
+    else:
+        raise TypeError(f'save_result only accepts types {str} and {FuncType}')
+
+    def decorator(func):
+        @wraps(func)
+        def inner(*args, **kwargs):
+            result = func(*args, **kwargs)
+            with open(file, 'w') as f:
+                f.write(result)
+            return result
+        return inner
+
+    return decorator if s else decorator(func_or_filename)
 
 
 @save_result
@@ -456,6 +467,42 @@ def q6(sentences: str) -> str:
     return random.choice(tuple(filter(len, sentences.splitlines())))
 
 
+@save_result
+def q7(script: str) -> str:
+    model = Unigram(token_indexifier=Indexifiers.Letters.lowercase)
+    model.fit(script)
+    tpt = model.transition_probability_table
+
+    return ', '.join(map(lambda x: f'{round(x, 4):.4f}', tpt))
+
+
+@save_result
+def q8(real_script: str, fake_script: str, clf: NaiveBayesClassifier) -> str:
+    fake_data = [list(fake_script)]
+    real_data = [list(real_script)]
+
+    data = fake_data + real_data
+    labels = (['Fake'] * len(fake_data)) + (['Real'] * len(real_data))
+
+    clf.fit(data, labels)
+
+    posteriors_fake = sorted(
+        clf.posteriors['Fake'].items(), key=lambda x: x[0])
+
+    return ', '.join(map(lambda x: f'{x[1]:.4f}', posteriors_fake))
+
+
+@save_result
+def q9(sentences: str, clf: NaiveBayesClassifier) -> str:
+    data = list(map(lambda x: list(x), sentences.splitlines()))
+
+    print(*data, sep='\n\n')
+    predictions = clf.predict(data)
+    print('\n\n\n\n\n\n\n', predictions)
+
+    return ','.join(map(lambda x: '0' if x == 'Real' else '1', predictions))
+
+
 def cleanup(script: str) -> str:
     return ' '.join([res for token in filter(len, script.split()) if len(res := ''.join(filter(str.isalpha, token.lower())))])
 
@@ -486,45 +533,61 @@ def download_script(title: str, filename: str):
         f.write(script)
 
 
-def get_script():
-    global SCRIPT_FILE
-    global TXT_EXTENSION
+def get_script(script_file: str, txt_extension: str = '.txt') -> str:
     try:
-        with open(SCRIPT_FILE) as f:
-            return f.read()
+        if txt_extension not in script_file:
+            script_file += txt_extension
+        with open(script_file) as f:
+            return f.read().strip()
     except FileNotFoundError:
         try:
-            with open(SCRIPT_FILE.lower().replace(' ', '_')) as f:
+            with open(script_file.lower().replace(' ', '_')) as f:
                 return f.read()
         except FileNotFoundError:
             pass
 
-        if TXT_EXTENSION in SCRIPT_FILE:
-            title = SCRIPT_FILE[:-len(TXT_EXTENSION)]
+        if txt_extension in script_file:
+            title = script_file[:-len(txt_extension)]
         else:
-            title = SCRIPT_FILE
-            SCRIPT_FILE = f'{SCRIPT_FILE}{TXT_EXTENSION}'
-        SCRIPT_FILE = SCRIPT_FILE.lower().replace(' ', '_')
-        download_script(title, SCRIPT_FILE)
-        with open(SCRIPT_FILE) as f:
+            title = script_file
+            script_file = f'{script_file}{txt_extension}'
+        script_file = script_file.lower().replace(' ', '_')
+        download_script(title, script_file)
+        with open(script_file) as f:
             return f.read()
 
 
 def main():
-    script = get_script()
+    real_script = get_script('toy_story')
 
     # q1()
+
     # q2(script)
+
     # q3(script)
+
     # q4(script)
+
     # sentences = q5(script)
+
     # q6(sentences)
-    pass
+
+    fake_script = get_script('fake_script')
+
+    # q7(fake_script)
+
+    clf = NaiveBayesClassifier(priors={'Fake': 0.44, 'Real': 0.56})
+
+    q8(real_script, fake_script, clf)
+
+    sentences = (f := open('q5.txt')).read().strip()
+
+    f.close()
+
+    q9(sentences, clf)
+
+    print('done!')
 
 
 if __name__ == '__main__':
-    # main()
-    nb = NaiveBayesClassifier(priors={10: 10})
-    nb._compute_priors([1, 2, 1, 2, 1, 1, 1, 1, 3, 4,
-                        1, 2, 3, 4, 5, 2, 3, 2, 3, 1])
-    print(nb._priors)
+    main()
