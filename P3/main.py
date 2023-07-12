@@ -337,7 +337,8 @@ class NaiveBayesClassifier:
         self._priors = probability.compute_priors(labels)
 
     def _compute_posteriors(self, features: Sequence[Any], labels: Sequence[Any]):
-        self._posteriors = probability.compute_posteriors(features, labels)
+        self._posteriors = probability.compute_posteriors(
+            features, labels, self._priors)
 
     def fit(self, features: Sequence[Sequence[Any]], labels: Sequence[Any]) -> Self:
         if not self._priors:
@@ -355,9 +356,6 @@ class NaiveBayesClassifier:
                 prob = math.log(self._priors[label])
                 _get = self._posteriors[label].get
                 prob = sum(map(lambda x: math.log(_get(x, 1)), feats))
-                # for feat in feats:
-                #     if feat in self._posteriors[label]:
-                #         prob += math.log(self._posteriors[label][feat])
                 if prob > max_prob:
                     max_prob = prob
                     predicted_label = label
@@ -478,8 +476,8 @@ def q7(script: str) -> str:
 
 @save_result
 def q8(real_script: str, fake_script: str, clf: NaiveBayesClassifier) -> str:
-    fake_data = [list(fake_script)]
-    real_data = [list(real_script)]
+    fake_data = [fake_script]
+    real_data = [real_script]
 
     data = fake_data + real_data
     labels = (['Fake'] * len(fake_data)) + (['Real'] * len(real_data))
@@ -495,10 +493,7 @@ def q8(real_script: str, fake_script: str, clf: NaiveBayesClassifier) -> str:
 @save_result
 def q9(sentences: str, clf: NaiveBayesClassifier) -> str:
     data = list(map(lambda x: list(x), sentences.splitlines()))
-
-    print(*data, sep='\n\n')
     predictions = clf.predict(data)
-    print('\n\n\n\n\n\n\n', predictions)
 
     return ','.join(map(lambda x: '0' if x == 'Real' else '1', predictions))
 
