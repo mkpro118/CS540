@@ -14,7 +14,7 @@ try:
 except ImportError:
     from typing_extensions import Self
 
-import probability
+from . import probability
 
 
 class Indexifiers:
@@ -285,11 +285,7 @@ class Bigram(Ngram):
             idx, int), f'required index of type {int}, found {idx = } {type(idx)} ({token = })'
         tpt = self._tpt[idx]
 
-        print(f'{token = }', f'{tpt = }', sum(tpt))
         idx = random.choices(range(len(tpt)), weights=tpt)[0]
-        print(f'{idx = }')
-
-        print(f'{self._inverse_mapping[idx] = }')
         return self._inverse_mapping[idx]
 
 
@@ -305,7 +301,6 @@ class Trigram(Ngram):
         )
 
     def _predict(self, token: str) -> str:
-        print(self.__class__.__name__, token)
         idx1, idx2 = self._token_indexifier(token)  # type: ignore
         assert isinstance(idx1, int)
         assert isinstance(idx2, int)
@@ -361,6 +356,21 @@ class NaiveBayesClassifier:
                     predicted_label = label
             predictions.append(predicted_label)
         return tuple(predictions)  # type: ignore
+
+    def predict_proba(self, X: Sequence[Sequence[Any]]) -> tuple[tuple[Any, float]]:
+        predictions = []
+        for feats in X:
+            max_prob = float('-inf')
+            predicted_label = None
+            for label in self._priors.keys():
+                prob = math.log(self._priors[label])
+                _get = self._posteriors[label].get
+                prob = sum(map(lambda x: math.log(_get(x, 1)), feats))
+                if prob > max_prob:
+                    max_prob = prob
+                    predicted_label = label
+            predictions.append((predicted_label, math.exp(max_prob)))
+        return tuple(predictions)
 
     @property
     def priors(self):
@@ -555,33 +565,38 @@ def get_script(script_file: str, txt_extension: str = '.txt') -> str:
 def main():
     real_script = get_script('toy_story')
 
-    # q1()
+    q1()
+    print('q1 done!')
 
-    # q2(script)
+    q2(real_script)
+    print('q2 done!')
 
-    # q3(script)
+    q3(real_script)
+    print('q3 done!')
 
-    # q4(script)
+    q4(real_script)
+    print('q4 done!')
 
-    # sentences = q5(script)
+    sentences = q5(real_script)
+    print('q5 done!')
 
-    # q6(sentences)
+    q6(sentences)
+    print('q6 done!')
 
     fake_script = get_script('fake_script')
 
-    # q7(fake_script)
+    q7(fake_script)
+    print('q7 done!')
 
     clf = NaiveBayesClassifier(priors={'Fake': 0.44, 'Real': 0.56})
 
     q8(real_script, fake_script, clf)
-
-    sentences = (f := open('q5.txt')).read().strip()
-
-    f.close()
+    print('q8 done!')
 
     q9(sentences, clf)
+    print('q9 done!')
 
-    print('done!')
+    print('All done!')
 
 
 if __name__ == '__main__':
