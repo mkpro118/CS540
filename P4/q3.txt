@@ -1,5 +1,5 @@
 Mean of the time-differenced data
 Standard deviation of the time-differenced data
- Median of the time-differenced data
+Median of the time-differenced data
 Linear trend coefficient of the data
 Auto-correlation of the data
