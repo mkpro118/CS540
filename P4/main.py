@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+
 def cleanup(file: str) -> pd.DataFrame:
     df = pd.read_csv('time_series_covid19_deaths_US.csv')
     unique_states = np.unique(df["Province_State"].values)
@@ -19,9 +20,7 @@ def cleanup(file: str) -> pd.DataFrame:
     not_states = set(unique_states).difference(set(states))
     df = df[~df["Province_State"].isin(not_states)]
     df = df.drop(['UID', 'iso2', 'iso3', 'code3', 'FIPS', 'Admin2',
-           'Country_Region', 'Lat', 'Long_', 'Combined_Key'], axis=1)
+                  'Country_Region', 'Lat', 'Long_', 'Combined_Key'], axis=1)
     df = df.groupby("Province_State").agg(sum)
     df.reset_index(inplace=True)
     return df
-
-    
