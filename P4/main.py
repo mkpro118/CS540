@@ -423,7 +423,8 @@ if _CLEANUP:
 
         df = pd.read_csv(file)
 
-        unique_states = np.unique(df["Province_State"].values)  # type: ignore[arg-type]
+        # type: ignore[arg-type]
+        unique_states = np.unique(df["Province_State"].values)
 
         states = np.array([
             'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California',
