@@ -68,7 +68,6 @@ def get_move_as_str(move: MoveList) -> str:
 
 class Search:
     class Heuristics:
-
         @staticmethod
         def euclidean(pos1: tuple[float, float], pos2: tuple[float, float]) -> float:
             return sum(((pos1[0] - pos2[0]) ** 2, (pos1[1] - pos2[1]) ** 2)) ** 0.5
