@@ -14,7 +14,7 @@ try:
 except ImportError:
     from typing_extensions import Self
 
-from . import probability
+import probability
 
 
 class Indexifiers:
