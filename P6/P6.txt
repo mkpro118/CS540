@@ -1,0 +1,29 @@
+##p: 6
+##id: mkumar42
+##1: 1
+##2: Handwritten English Uppercase Letter Classificiation
+##3: true
+##4: true
+##5: true
+##6: 
+##7: 
+##8: 
+##9: 10 - I have really well made project, with good explanations and visualizations.;;10 - While P1 had a similar goal, the number of output classes was much smaller. A more complex neural network was used in this project.;;8.5 - I don't think the project goal was creative, but I do think the way I've done the project is.
+##10: true
+##11: None
+
+##0:
+ID: mkumar42
+Question 1 is correct. (1/1)
+Question 2 is correct. (2/2)
+Question 3 is correct. (1/1)
+Question 4 is correct. (1/1)
+Question 5 is correct. (1/1)
+Question 6 is incorrect. (0/10) Empty.
+Question 7 is incorrect. (0/10) Empty.
+Question 8 is incorrect. (0/10) Empty.
+Question 9 is correct. (3/3)
+Question 10 is incorrect. (0/1) Empty.
+Question 11 is correct. (1/1)
+Grade: 10 out of 41.
+Code: `fx`l9?7<"<&?"?&<"<&<"<&<"<&="<=&="<=&="<=&>">&="<&<"<&0<="9<
