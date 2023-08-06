@@ -8,7 +8,7 @@
 ##6: 
 ##7: 
 ##8: 
-##9: 10 - I have really well made project, with good explanations and visualizations.;;10 - While P1 had a similar goal, the number of output classes was much smaller. A more complex neural network was used in this project.;;8.5 - I don't think the project goal was creative, but I do think the way I've done the project is.
+##9: 10 - I have a really well made project, with good explanations and visualizations.;;10 - While P1 had a similar goal, the number of output classes was much smaller. A more complex neural network was used in this project.;;8.5 - I don't think the project goal was creative, but I do think the way I've done the project is.
 ##10: true
 ##11: None
 
